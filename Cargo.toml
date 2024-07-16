@@ -1,0 +1,11 @@
+[package]
+name = "kicad-xilinx-symgen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.9", features = ["derive"] }
+regex = "1.10.5"
+term_size = "0.3.2"
+
