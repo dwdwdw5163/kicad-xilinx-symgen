@@ -12,9 +12,10 @@ use regex::Regex;
 use term_size;
 
 #[derive(Parser)]
-#[command(version, about, long_about = None)]
+#[command(version, about)]
 struct Args {
     file: PathBuf,
+    #[arg(short, long)]
     ///FPGA part name
     name: Option<String>,
 }
