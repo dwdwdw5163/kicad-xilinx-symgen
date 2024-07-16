@@ -2,7 +2,7 @@
 
 ## Usage  
 ```shell
-cargo run [ACSII txt downloaded from Xilinx]
+cargo run [ASCII txt downloaded from Xilinx]
 ```
 
 ## Example  
