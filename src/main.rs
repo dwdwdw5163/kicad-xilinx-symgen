@@ -134,13 +134,13 @@ fn main() -> Result<(), Error> {
 
     let group_field = &headers[field_index];
 
-    // 根据用户选择的字段进行分组
-    let mut groups: HashMap<String, Vec<Record>> = HashMap::new();
+    // // 根据用户选择的字段进行分组
+    // let mut groups: HashMap<String, Vec<Record>> = HashMap::new();
 
-    for record in records {
-        let key = record.fields.get(group_field).unwrap().clone();
-        groups.entry(key).or_insert_with(Vec::new).push(record);
-    }
+    // for record in records {
+    //     let key = record.fields.get(group_field).unwrap().clone();
+    //     groups.entry(key).or_insert_with(Vec::new).push(record);
+    // }
 
     // 让用户选择排序字段
     print!("Enter the number of the field to sort by within groups: ");
@@ -161,19 +161,43 @@ fn main() -> Result<(), Error> {
         "\nGrouped and sorted data by {} and {}:",
         group_field, sort_field
     );
-    for (key, group) in &mut groups {
-        println!("Group {}: ", key);
-        group.sort_by(|a, b| {
-            a.fields
-                .get(sort_field)
-                .unwrap()
-                .cmp(b.fields.get(sort_field).unwrap())
-        });
-        for record in group {
-            println!("{:?}", record);
+
+    // for (key, group) in &mut groups {
+    //     println!("Group {}: ", key);
+    //     group.sort_by(|a, b| {
+    //         a.fields
+    //             .get(sort_field)
+    //             .unwrap()
+    //             .cmp(b.fields.get(sort_field).unwrap())
+    //     });
+    //     for record in group {
+    //         println!("{:?}", record);
+    //     }
+    // }
+
+    let mut units: HashMap<String, HashMap<String, Vec<Record>>> = HashMap::new();
+    // 创建嵌套的 HashMap 进行分组和排序
+    let mut units: HashMap<String, HashMap<String, Vec<&Record>>> = HashMap::new();
+    for record in &records {
+        let group_key = record.fields.get(group_field).unwrap().clone();
+        let sort_key = record.fields.get(sort_field).unwrap().clone();
+        units.entry(group_key)
+            .or_insert_with(HashMap::new)
+            .entry(sort_key)
+            .or_insert_with(Vec::new)
+            .push(record);
+    }    
+    // 打印分组并排序后的数据
+    println!("\nGrouped and sorted data by {} and {}:", group_field, sort_field);
+    for (group_key, group) in &units {
+        println!("Group {}: ", group_key);
+        for (sort_key, records) in group {
+            println!("  {}: ", sort_key);
+            for record in records {
+                println!("    {:?}", record);
+            }
         }
     }
-
     // 生成 KiCad 库文件
     let mut kicad_lib = String::new();
     kicad_lib.push_str("EESchema-LIBRARY Version 2.4\n#encoding utf-8\n");
@@ -182,7 +206,7 @@ fn main() -> Result<(), Error> {
     kicad_lib.push_str(&format!(
         "DEF {} U 0 40 Y Y {} L N\n",
         args.name.unwrap_or("XilinxFPGA".to_string()),
-        groups.len()
+        units.len()
     ));
     kicad_lib.push_str(&format!("F0 \"U\" 0 300 50 H V C CNN\n"));
     kicad_lib.push_str(&format!("F1 \"FPGA\" 0 200 50 H V C CNN\n"));
@@ -190,9 +214,9 @@ fn main() -> Result<(), Error> {
     kicad_lib.push_str(&format!("F3 \"\" 0 0 50 H I C CNN\n"));
     kicad_lib.push_str("DRAW\n");
 
-    for (key, group) in groups.iter() {
+    for (group_name, sort_uniq_values) in units.iter() {
     
-        for (i, record) in group.iter().enumerate() {
+        for (i, values) in sort_uniq_values.iter().enumerate() {
             let pin = record.fields.get("Pin").unwrap();
             let pin_name = record.fields.get("Pin Name").unwrap();
             let posx = if i < group.len() / 2 { 0 } else { 3000 };
