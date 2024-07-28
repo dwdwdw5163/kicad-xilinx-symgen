@@ -20,6 +20,7 @@ struct Args {
     name: Option<String>,
 }
 
+///FSM States
 enum States {
     SeekTable,
     ReadHeader,
@@ -27,11 +28,15 @@ enum States {
     END,
 }
 
+///Key-value pairs, each record indicates a pin and its attribute.
+///Each record is unique because of the Pin Name.
 struct Record {
+    ///Table headers and corresponding values
     fields: HashMap<String, String>,
 }
 
 impl Record {
+    ///Create a record from a parsed line
     fn new(headers: &[String], values: &[&str]) -> Self {
         let mut fields = HashMap::new();
         for (header, value) in headers.iter().zip(values.iter()) {
@@ -73,6 +78,7 @@ fn main() -> Result<(), Error> {
 
     while let Some((line_num, line)) = lines_iter.next() {
         match state {
+            //Seek a blank line 
             States::SeekTable => {
                 if re_blank.is_match(&line) {
                     println!("{}", "-".repeat(term_size::dimensions().unwrap().0));
