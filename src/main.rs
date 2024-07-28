@@ -184,12 +184,8 @@ fn main() -> Result<(), Error> {
     kicad_lib.push_str(&format!("F3 \"\" 0 0 50 H I C CNN\n"));
     kicad_lib.push_str("DRAW\n");
 
-    for (_key, group) in groups.iter() {
-        kicad_lib.push_str(&format!(
-            "S 150 150 2850 -{} {} 1 0 f\n",
-            group.len() / 2 * 100 + 50,
-            unit_number
-        ));
+    for (key, group) in groups.iter() {
+    
         for (i, record) in group.iter().enumerate() {
             let pin = record.fields.get("Pin").unwrap();
             let pin_name = record.fields.get("Pin Name").unwrap();
@@ -205,6 +201,13 @@ fn main() -> Result<(), Error> {
                 pin_name, pin, posx, posy, orientation, unit_number
             ));
         }
+
+        kicad_lib.push_str(&format!(
+            "S 150 150 2850 -{} {} 1 0 f\n",
+            group.len() / 2 * 100 + 50,
+            unit_number
+        ));
+        kicad_lib.push_str(&format!("T 0 -320 50 100 0 {} 1 Group{}\n", unit_number, key));
 
         unit_number += 1;
     }
