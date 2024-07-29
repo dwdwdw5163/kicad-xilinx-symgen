@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Debug,
     fs::File,
     io::{self, BufRead, BufReader, Write},
@@ -71,14 +71,14 @@ fn main() -> Result<(), Error> {
     let mut headers: Vec<String> = Vec::new();
     let mut records: Vec<Record> = Vec::new();
 
-    let file = File::open(args.file)?;
+    let file = File::open(args.file.clone())?;
     let mut buf_reader = BufReader::new(file);
 
     let mut lines_iter = buf_reader.lines().map(|l| l.unwrap()).enumerate();
 
     while let Some((line_num, line)) = lines_iter.next() {
         match state {
-            //Seek a blank line 
+            //Seek a blank line
             States::SeekTable => {
                 if re_blank.is_match(&line) {
                     println!("{}", "-".repeat(term_size::dimensions().unwrap().0));
@@ -134,13 +134,13 @@ fn main() -> Result<(), Error> {
 
     let group_field = &headers[field_index];
 
-    // // 根据用户选择的字段进行分组
-    // let mut groups: HashMap<String, Vec<Record>> = HashMap::new();
+    // 根据用户选择的字段进行分组
+    let mut groups: HashMap<String, Vec<Record>> = HashMap::new();
 
-    // for record in records {
-    //     let key = record.fields.get(group_field).unwrap().clone();
-    //     groups.entry(key).or_insert_with(Vec::new).push(record);
-    // }
+    for record in records {
+        let key = record.fields.get(group_field).unwrap().clone();
+        groups.entry(key).or_insert_with(Vec::new).push(record);
+    }
 
     // 让用户选择排序字段
     print!("Enter the number of the field to sort by within groups: ");
@@ -162,42 +162,46 @@ fn main() -> Result<(), Error> {
         group_field, sort_field
     );
 
-    // for (key, group) in &mut groups {
-    //     println!("Group {}: ", key);
-    //     group.sort_by(|a, b| {
-    //         a.fields
-    //             .get(sort_field)
-    //             .unwrap()
-    //             .cmp(b.fields.get(sort_field).unwrap())
-    //     });
-    //     for record in group {
-    //         println!("{:?}", record);
-    //     }
-    // }
+    for (key, group) in &mut groups {
+        println!("Group {}: ", key);
+        group.sort_by(|a, b| {
+            a.fields
+                .get(sort_field)
+                .unwrap()
+                .cmp(b.fields.get(sort_field).unwrap())
+        });
+        for record in group {
+            println!("{:?}", record);
+        }
+    }
 
-    let mut units: HashMap<String, HashMap<String, Vec<Record>>> = HashMap::new();
-    // 创建嵌套的 HashMap 进行分组和排序
-    let mut units: HashMap<String, HashMap<String, Vec<&Record>>> = HashMap::new();
-    for record in &records {
-        let group_key = record.fields.get(group_field).unwrap().clone();
-        let sort_key = record.fields.get(sort_field).unwrap().clone();
-        units.entry(group_key)
-            .or_insert_with(HashMap::new)
-            .entry(sort_key)
-            .or_insert_with(Vec::new)
-            .push(record);
-    }    
-    // 打印分组并排序后的数据
-    println!("\nGrouped and sorted data by {} and {}:", group_field, sort_field);
-    for (group_key, group) in &units {
-        println!("Group {}: ", group_key);
-        for (sort_key, records) in group {
-            println!("  {}: ", sort_key);
-            for record in records {
-                println!("    {:?}", record);
+    //search for replicated pin names
+    let mut units: HashMap<String, Vec<Vec<&Record>>> = HashMap::new();
+    let mut pin_names_occurred: HashSet<String> = HashSet::new();
+    for (key, group) in groups.iter() {
+        let value = units.entry(key.to_string()).or_insert(Vec::new());
+        for record in group {
+            let pin_name = record.fields.get("Pin Name").unwrap().to_string();
+            if pin_names_occurred.contains(&pin_name) {                
+                value.last_mut().unwrap().push(record);
+            } else {
+                pin_names_occurred.insert(pin_name);
+                let pins = vec![record];
+                value.push(pins);
             }
         }
     }
+
+    let mut count = 0;
+    for (_, unit) in units.iter() {
+        for pins in unit {
+            for _pin in pins {
+                count += 1;
+            }
+        }
+    }
+    println!("Total Pin in units: {}", count);
+
     // 生成 KiCad 库文件
     let mut kicad_lib = String::new();
     kicad_lib.push_str("EESchema-LIBRARY Version 2.4\n#encoding utf-8\n");
@@ -206,7 +210,7 @@ fn main() -> Result<(), Error> {
     kicad_lib.push_str(&format!(
         "DEF {} U 0 40 Y Y {} L N\n",
         args.name.unwrap_or("XilinxFPGA".to_string()),
-        units.len()
+        groups.len()
     ));
     kicad_lib.push_str(&format!("F0 \"U\" 0 300 50 H V C CNN\n"));
     kicad_lib.push_str(&format!("F1 \"FPGA\" 0 200 50 H V C CNN\n"));
@@ -214,30 +218,34 @@ fn main() -> Result<(), Error> {
     kicad_lib.push_str(&format!("F3 \"\" 0 0 50 H I C CNN\n"));
     kicad_lib.push_str("DRAW\n");
 
-    for (group_name, sort_uniq_values) in units.iter() {
-    
-        for (i, values) in sort_uniq_values.iter().enumerate() {
-            let pin = record.fields.get("Pin").unwrap();
-            let pin_name = record.fields.get("Pin Name").unwrap();
-            let posx = if i < group.len() / 2 { 0 } else { 3000 };
-            let posy = if i < group.len() / 2 {
+    for (unit_name, unit) in units.iter() {
+        for (i, pins) in unit.iter().enumerate() {
+            let posx = if i < unit.len() / 2 { 0 } else { 3000 };
+            let posy = if i < unit.len() / 2 {
                 i * 100
             } else {
-                (i - group.len() / 2) * 100
+                (i - unit.len() / 2) * 100
             };
-            let orientation = if i < group.len() / 2 { "R" } else { "L" };
-            kicad_lib.push_str(&format!(
-                "X {} {} {} -{} 150 {} 50 50 {} 1 P\n",
-                pin_name, pin, posx, posy, orientation, unit_number
-            ));
+            let orientation = if i < unit.len() / 2 { "R" } else { "L" };
+            for pin in pins {
+                let pin_name = pin.fields.get("Pin Name").unwrap();
+                let pin = pin.fields.get("Pin").unwrap();
+                kicad_lib.push_str(&format!(
+                    "X {} {} {} -{} 150 {} 50 50 {} 1 P\n",
+                    pin_name, pin, posx, posy, orientation, unit_number
+                ));
+            }
         }
 
         kicad_lib.push_str(&format!(
             "S 150 150 2850 -{} {} 1 0 f\n",
-            group.len() / 2 * 100 + 50,
+            unit.len() / 2 * 100 + 50,
             unit_number
         ));
-        kicad_lib.push_str(&format!("T 0 -320 50 100 0 {} 1 Group{}\n", unit_number, key));
+        kicad_lib.push_str(&format!(
+            "T 0 -320 50 100 0 {} 1 Group{}\n",
+            unit_number, unit_name
+        ));
 
         unit_number += 1;
     }
@@ -247,12 +255,17 @@ fn main() -> Result<(), Error> {
     kicad_lib.push_str("#\n#End Library\n");
 
     // 将字符串写入 .lib 文件
-    let filename = "output.lib";
+    let mut filename = args.file.clone();
+    filename.set_extension("lib");
     let mut file = File::create(filename)?;
     file.write_all(kicad_lib.as_bytes())?;
 
     println!("Finished Generation");
-    println!("{} pins parsed {} units generated", pins_count, groups.len());
+    println!(
+        "{} pins parsed {} units generated",
+        pins_count,
+        groups.len()
+    );
 
     Ok(())
 }
