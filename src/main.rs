@@ -182,7 +182,7 @@ fn main() -> Result<(), Error> {
         let value = units.entry(key.to_string()).or_insert(Vec::new());
         for record in group {
             let pin_name = record.fields.get("Pin Name").unwrap().to_string();
-            if pin_names_occurred.contains(&pin_name) {                
+            if pin_names_occurred.contains(&pin_name) {
                 value.last_mut().unwrap().push(record);
             } else {
                 pin_names_occurred.insert(pin_name);
@@ -243,8 +243,10 @@ fn main() -> Result<(), Error> {
             unit_number
         ));
         kicad_lib.push_str(&format!(
-            "T 0 -320 50 100 0 {} 1 Group{}\n",
-            unit_number, unit_name
+            "T 0 1500 -{} 100 0 {} 1 Group{}\n",
+            (unit.len() / 2 * 100 + 50) / 2,
+            unit_number,
+            unit_name
         ));
 
         unit_number += 1;
